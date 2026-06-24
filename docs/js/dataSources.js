@@ -17,7 +17,7 @@ const SLGA = {
     { key: 'SND', label: 'Sand content', unit: '%', coverage: 'SND_ACLEP_AU_NAT_C' },
     { key: 'PHW', label: 'pH (water)', unit: 'pH', coverage: 'PHW_ACLEP_AU_NAT_C' },
     { key: 'SOC', label: 'Organic carbon', unit: '%', coverage: 'SOC_ACLEP_AU_NAT_C' },
-    { key: 'AWC', label: 'Available water capacity', unit: 'mm/mm', coverage: 'AWC_ACLEP_AU_NAT_C' },
+    { key: 'AWC', label: 'Available water capacity', unit: '%', coverage: 'AWC_ACLEP_AU_NAT_C' },
     { key: 'BDW', label: 'Bulk density (whole earth)', unit: 'g/cm3', coverage: 'BDW_ACLEP_AU_NAT_C' },
     { key: 'NTO', label: 'Total nitrogen', unit: '%', coverage: 'NTO_ACLEP_AU_NAT_C' }
   ]

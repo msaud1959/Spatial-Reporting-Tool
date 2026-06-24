@@ -119,91 +119,58 @@ function normaliseArea(area) {
 // depths for a single point in one call. This replaced an earlier (incorrect)
 // per-attribute ArcGIS identify approach.
 
-// Match an SLGA attribute code from a free-text layer name.
-const ATTR_KEYWORDS = [
-  { key: 'CLY', re: /\bclay\b/i },
-  { key: 'SLT', re: /\bsilt\b/i },
-  { key: 'SND', re: /\bsand\b/i },
-  { key: 'PHW', re: /\bph\b|p\.?h\.?\s*\(?water|soil\s*ph/i },
-  { key: 'SOC', re: /organic\s*carbon|\bsoc\b|\borganic\b/i },
-  { key: 'AWC', re: /available\s*water|water\s*capacity|\bawc\b/i },
-  { key: 'BDW', re: /bulk\s*dens|\bbdw?\b|density/i },
-  { key: 'NTO', re: /nitrogen|\bnto?\b/i }
-];
-
-// Match a standard SLGA depth label from a free-text name (handles "0-5cm",
-// "0 to 5 cm", "000_005", etc).
-const DEPTH_PATTERNS = [
-  { label: '0-5 cm', re: /\b0+\D*0*5\b|0-5|000[_-]?005/ },
-  { label: '5-15 cm', re: /\b0*5\D*15\b|5-15|005[_-]?015/ },
-  { label: '15-30 cm', re: /\b15\D*30\b|15-30|015[_-]?030/ },
-  { label: '30-60 cm', re: /\b30\D*60\b|30-60|030[_-]?060/ },
-  { label: '60-100 cm', re: /\b60\D*100\b|60-100|060[_-]?100/ },
-  { label: '100-200 cm', re: /\b100\D*200\b|100-200/ }
-];
-
-function matchAttr(name) {
-  const hit = ATTR_KEYWORDS.find((a) => a.re.test(name));
-  return hit ? hit.key : null;
-}
-function matchDepth(name) {
-  const hit = DEPTH_PATTERNS.find((d) => d.re.test(name));
-  return hit ? hit.label : null;
-}
+// The Drill response names attributes with C#-style backing-field keys like
+// "<attributeName>k__BackingField". Map those names to our SLGA codes.
+const DRILL_ATTR_MAP = {
+  'CLAY': 'CLY',
+  'SILT': 'SLT',
+  'SAND': 'SND',
+  'PHC': 'PHW',            // pH (CaCl2)
+  'SOC': 'SOC',
+  'AWC': 'AWC',
+  'BULK-DENSITY': 'BDW',
+  'TOTAL_N': 'NTO'
+};
 
 function cleanValue(v) {
   if (v === null || v === undefined || v === '' || v === 'NoData') return null;
   const n = Number(v);
-  // SLGA uses large negative sentinels for no-data.
+  // SLGA uses large negative sentinels (e.g. -9999) for no-data.
   return Number.isFinite(n) && n > -1000 ? n : null;
 }
 
-// Walk the (variably-shaped) Drill response and pull out every {name, value}
-// pair so we can match them to attributes/depths regardless of nesting.
-function flattenDrill(node, nameHint, out) {
-  if (node == null) return;
-  if (Array.isArray(node)) {
-    node.forEach((item) => flattenDrill(item, nameHint, out));
-    return;
-  }
-  if (typeof node === 'object') {
-    const name = node.Name || node.name || node.Layer || node.layer ||
-                 node.Title || node.title || node.Attribute || nameHint;
-    const rawVal = node.Value ?? node.value ?? node.PixelValue ?? node.pixelValue ?? node.Result;
-    if (name && (rawVal !== undefined)) out.push({ name: String(name), value: rawVal });
-    // Recurse into nested arrays/objects (e.g. a layer with a Depths array).
-    Object.entries(node).forEach(([k, v]) => {
-      if (v && typeof v === 'object') flattenDrill(v, node.Name || node.name || nameHint || k, out);
-    });
-  }
+function depthLabelFor(upper, lower) {
+  return `${Math.round(upper)}-${Math.round(lower)} cm`;
 }
 
+// Parse the ASRIS Drill response into our attribute x depth grid.
 function buildSoilAttributes(raw) {
-  const flat = [];
-  flattenDrill(raw, null, flat);
-
-  // Seed the full attribute x depth grid (so the report layout is stable).
   const grid = {};
   SLGA.attributes.forEach((attr) => {
     grid[attr.key] = {};
     SLGA.depths.forEach((d) => { grid[attr.key][d.label] = null; });
   });
 
+  const list = (raw && Array.isArray(raw.SoilAttributes)) ? raw.SoilAttributes : [];
   let matched = 0;
-  flat.forEach(({ name, value }) => {
-    const key = matchAttr(name);
-    const depth = matchDepth(name);
-    if (key && depth && grid[key] && depth in grid[key]) {
-      const v = cleanValue(value);
-      if (v !== null) { grid[key][depth] = v; matched++; }
-    }
+  list.forEach((entry) => {
+    const name = entry['<attributeName>k__BackingField'] ?? entry.attributeName ?? entry.Name;
+    const code = name && DRILL_ATTR_MAP[String(name).toUpperCase()];
+    if (!code || !grid[code]) return;
+    (entry.SoilLayers || entry.soilLayers || []).forEach((ly) => {
+      const label = depthLabelFor(ly.upperDepth, ly.lowerDepth);
+      if (label in grid[code]) {
+        const v = cleanValue(ly.value);
+        if (v !== null) { grid[code][label] = v; matched++; }
+      }
+    });
   });
 
   const attributes = SLGA.attributes.map((attr) => ({
     key: attr.key, label: attr.label, unit: attr.unit,
     depths: SLGA.depths.map((d) => ({ label: d.label, value: grid[attr.key][d.label] }))
   }));
-  return { attributes, matched, received: flat.length };
+  return { attributes, matched, received: list.length };
 }
 
 async function getSoilReport([lng, lat]) {
