@@ -3,18 +3,43 @@
 // `error` field instead of throwing, so one unreachable source never breaks
 // the whole report.
 
-const FETCH_TIMEOUT_MS = 10000;
+const FETCH_TIMEOUT_MS = 12000;
 
-async function fetchJson(url, options = {}) {
+// Some of the government data servers don't send CORS headers, so a browser
+// running on github.io is blocked from reading their responses ("Failed to
+// fetch"). To keep the static site working without a backend, we try the API
+// directly first (fast path when CORS is allowed), then fall back to public
+// CORS proxies that re-serve the response with permissive headers.
+const CORS_PROXIES = [
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+];
+
+async function timedFetch(url, options) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchJson(url, options = {}) {
+  const direct = String(url);
+  const targets = [direct, ...CORS_PROXIES.map((p) => p(direct))];
+  let lastErr;
+  for (const target of targets) {
+    try {
+      const res = await timedFetch(target, options);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      lastErr = err;
+      // Try the next fallback on network/CORS failures; keep looping otherwise.
+    }
+  }
+  throw lastErr || new Error('Request failed');
 }
 
 // ---- Geometry -------------------------------------------------------------
