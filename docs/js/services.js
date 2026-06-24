@@ -15,6 +15,35 @@ const CORS_PROXIES = [
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
 ];
 
+let jsonpCounter = 0;
+
+// ArcGIS REST servers (SLGA, ABS ASGS) support JSONP via a `callback` query
+// param - a <script> tag fetch that browsers never apply CORS to. This is
+// far more reliable than the public CORS proxies above, so it's tried first
+// for any Esri endpoint.
+function jsonpFetch(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__jsonp_cb_${Date.now()}_${jsonpCounter++}`;
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => cleanup(() => reject(new Error('JSONP timeout'))), FETCH_TIMEOUT_MS);
+
+    function cleanup(then) {
+      clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+      then();
+    }
+
+    window[callbackName] = (data) => cleanup(() => resolve(data));
+    script.onerror = () => cleanup(() => reject(new Error('JSONP request failed')));
+
+    const u = new URL(url);
+    u.searchParams.set('callback', callbackName);
+    script.src = u.toString();
+    document.head.appendChild(script);
+  });
+}
+
 async function timedFetch(url, options) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -22,6 +51,14 @@ async function timedFetch(url, options) {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function fetchEsriJson(url) {
+  try {
+    return await jsonpFetch(url);
+  } catch (err) {
+    return fetchJson(url);
   }
 }
 
@@ -73,7 +110,7 @@ async function identifyPixel(coverage, [lng, lat]) {
   url.searchParams.set('returnGeometry', 'false');
   url.searchParams.set('f', 'json');
 
-  const json = await fetchJson(url);
+  const json = await fetchEsriJson(url);
   const value = json?.value ?? json?.results?.[0]?.attributes?.['Pixel Value'];
   const parsed = value === undefined || value === 'NoData' ? null : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -137,13 +174,13 @@ async function queryAdminLayer(layer, polygon) {
   // response that's fast and safe to route through a CORS proxy.
   if (layer.id === 'sa1') {
     url.searchParams.set('returnCountOnly', 'true');
-    const json = await fetchJson(url);
+    const json = await fetchEsriJson(url);
     if (json.error) throw new Error(json.error.message || 'ArcGIS error');
     return { names: null, count: json.count ?? 0 };
   }
 
   url.searchParams.set('outFields', '*');
-  const json = await fetchJson(url);
+  const json = await fetchEsriJson(url);
   if (json.error) throw new Error(json.error.message || 'ArcGIS error');
   const names = (json.features || []).map((f) => pickName(f.attributes, layer.id));
   return { names, count: names.length };
