@@ -54,8 +54,12 @@ const NOMINATIM = {
 // JSONP path in services.js with no CORS proxy needed. Add more sources to the
 // list below to extend coverage.
 const SOIL_SITES = {
-  minZoom: 9,        // only query when zoomed in enough to keep responses small
+  minZoom: 8,        // only query when zoomed in enough to keep responses small
   maxPerSource: 500, // cap features per source per view
+  // Rough lat/lng bounds [[south, west], [north, east]] where the configured
+  // sources actually hold data. Used by the "Find soil pits" button to fly the
+  // map to somewhere with coverage, so users aren't guessing where to look.
+  coverageBounds: [[-29.5, 137.9], [-9.0, 154.0]], // Queensland
   sources: [
     {
       name: 'Queensland soil & land resource sites',

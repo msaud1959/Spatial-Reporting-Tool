@@ -147,7 +147,20 @@ const SpatialMap = (() => {
     }
   }
 
+  // Fly the map to a region that actually has soil-pit data and switch the
+  // layer on, so users don't have to guess where coverage exists.
+  function focusSoilSites() {
+    soilSitesOn = true;
+    soilSitesLayer.addTo(map);
+    if (SOIL_SITES.coverageBounds) {
+      map.fitBounds(SOIL_SITES.coverageBounds); // triggers moveend -> refreshSoilSites
+    } else {
+      refreshSoilSites();
+    }
+    document.dispatchEvent(new CustomEvent('soil-sites-focused'));
+  }
+
   map.on('moveend', () => { if (soilSitesOn) refreshSoilSites(); });
 
-  return { setMode, setRadius, clear, getArea, getMap, toggleSoilSites };
+  return { setMode, setRadius, clear, getArea, getMap, toggleSoilSites, focusSoilSites };
 })();

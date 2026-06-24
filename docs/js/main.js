@@ -13,6 +13,7 @@
   const printBtn = document.getElementById('print-btn');
   const soilSitesToggle = document.getElementById('soil-sites-toggle');
   const soilSitesStatus = document.getElementById('soil-sites-status');
+  const findSitesBtn = document.getElementById('find-sites-btn');
 
   function setStatus(text, kind) {
     statusEl.textContent = text || '';
@@ -80,6 +81,14 @@
   // Soil pits / sites layer toggle.
   soilSitesToggle.addEventListener('change', () => {
     SpatialMap.toggleSoilSites(soilSitesToggle.checked);
+  });
+
+  // "Find soil pits" — fly to a region with data and switch the layer on.
+  findSitesBtn.addEventListener('click', () => {
+    SpatialMap.focusSoilSites();
+  });
+  document.addEventListener('soil-sites-focused', () => {
+    soilSitesToggle.checked = true;
   });
 
   document.addEventListener('soil-sites-status', (e) => {
