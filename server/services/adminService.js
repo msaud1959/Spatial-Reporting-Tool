@@ -8,9 +8,14 @@ async function queryLayer(layer, polygonGeoJSON) {
   url.searchParams.set('geometryType', 'esriGeometryPolygon');
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
   url.searchParams.set('inSR', '4326');
-  url.searchParams.set('outFields', '*');
   url.searchParams.set('returnGeometry', 'false');
   url.searchParams.set('f', 'json');
+
+  // SA1 is only displayed as a count, and a large area returns hundreds of
+  // features - so ask the server for just the count.
+  const countOnly = layer.id === 'sa1';
+  if (countOnly) url.searchParams.set('returnCountOnly', 'true');
+  else url.searchParams.set('outFields', '*');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -19,7 +24,9 @@ async function queryLayer(layer, polygonGeoJSON) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error.message || 'ArcGIS error');
-    return (json.features || []).map((f) => f.attributes);
+    if (countOnly) return { names: null, count: json.count ?? 0 };
+    const names = (json.features || []).map((f) => pickName(f.attributes, layer.id));
+    return { names, count: names.length };
   } finally {
     clearTimeout(timeout);
   }
@@ -48,10 +55,12 @@ export async function getAdminReport(polygon) {
   const results = await Promise.all(
     ABS_ASGS.layers.map(async (layer) => {
       try {
-        const features = await queryLayer(layer, polygon);
-        // A large drawn area can intersect hundreds of fine-grained units (esp.
-        // SA1), so dedupe the names and cap how many we surface.
-        const allNames = [...new Set(features.map((f) => pickName(f, layer.id)))].sort();
+        const { names, count } = await queryLayer(layer, polygon);
+        if (names === null) {
+          return { id: layer.id, name: layer.name, matches: [], totalMatches: count, error: null };
+        }
+        // Dedupe and cap the named layers so the report stays readable.
+        const allNames = [...new Set(names)].sort();
         const matches = allNames.slice(0, MAX_NAMES_SHOWN);
         return { id: layer.id, name: layer.name, matches, totalMatches: allNames.length, error: null };
       } catch (err) {

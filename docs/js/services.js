@@ -123,29 +123,42 @@ function pickName(attrs, layerId) {
 
 const MAX_NAMES_SHOWN = 12;
 
-async function queryLayer(layer, polygon) {
+async function queryAdminLayer(layer, polygon) {
   const url = new URL(`${ABS_ASGS.base}/${layer.service}/query`);
   url.searchParams.set('geometry', JSON.stringify(toEsriPolygon(polygon)));
   url.searchParams.set('geometryType', 'esriGeometryPolygon');
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
   url.searchParams.set('inSR', '4326');
-  url.searchParams.set('outFields', '*');
   url.searchParams.set('returnGeometry', 'false');
   url.searchParams.set('f', 'json');
 
+  // SA1 is so fine-grained that a large area returns hundreds of features. We
+  // only display it as a count, so ask the server for just the count - a tiny
+  // response that's fast and safe to route through a CORS proxy.
+  if (layer.id === 'sa1') {
+    url.searchParams.set('returnCountOnly', 'true');
+    const json = await fetchJson(url);
+    if (json.error) throw new Error(json.error.message || 'ArcGIS error');
+    return { names: null, count: json.count ?? 0 };
+  }
+
+  url.searchParams.set('outFields', '*');
   const json = await fetchJson(url);
   if (json.error) throw new Error(json.error.message || 'ArcGIS error');
-  return (json.features || []).map((f) => f.attributes);
+  const names = (json.features || []).map((f) => pickName(f.attributes, layer.id));
+  return { names, count: names.length };
 }
 
 async function getAdminReport(polygon) {
   const boundaries = await Promise.all(
     ABS_ASGS.layers.map(async (layer) => {
       try {
-        const features = await queryLayer(layer, polygon);
-        // A large drawn area can intersect hundreds of fine-grained units (esp.
-        // SA1), so dedupe the names and cap how many we surface.
-        const allNames = [...new Set(features.map((f) => pickName(f, layer.id)))].sort();
+        const { names, count } = await queryAdminLayer(layer, polygon);
+        if (names === null) {
+          return { id: layer.id, name: layer.name, matches: [], totalMatches: count, error: null };
+        }
+        // Dedupe and cap the named layers so the report stays readable.
+        const allNames = [...new Set(names)].sort();
         const matches = allNames.slice(0, MAX_NAMES_SHOWN);
         return { id: layer.id, name: layer.name, matches, totalMatches: allNames.length, error: null };
       } catch (err) {
