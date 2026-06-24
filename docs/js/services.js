@@ -80,7 +80,11 @@ async function fetchJson(url, options = {}) {
   for (const target of targets) {
     try {
       const res = await timedFetch(target, options);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { const t = await res.text(); if (t) detail += `: ${t.slice(0, 200)}`; } catch (e) { /* ignore */ }
+        throw new Error(detail);
+      }
       return await res.json();
     } catch (err) {
       lastErr = err;
@@ -220,7 +224,8 @@ async function getSoilReport([lng, lat]) {
   const { attributes, matched, received } = buildSoilAttributes(raw);
   // Got a response but couldn't map any values -> flag it so we can see the shape.
   if (!error && received > 0 && matched === 0) {
-    error = `Received soil data but could not read it (got ${received} entries). Raw sample: ${JSON.stringify(raw).slice(0, 300)}`;
+    const sample = Array.isArray(raw) ? raw[0] : raw;
+    error = `Received soil data but could not read it (got ${received} entries). One entry: ${JSON.stringify(sample).slice(0, 700)}`;
   } else if (!error && received === 0) {
     error = 'Soil service returned no readable data for this location.';
   }
@@ -236,10 +241,6 @@ async function getSoilReport([lng, lat]) {
 
 // ---- Administrative boundaries (ABS ASGS) ----------------------------------
 
-function toEsriPolygon(polygonFeature) {
-  return { rings: polygonFeature.geometry.coordinates, spatialReference: { wkid: 4326 } };
-}
-
 function pickName(attrs, layerId) {
   // Prefer the field that matches this layer (e.g. lga_name_2021 for the LGA
   // layer), then fall back to a code field, then any *_name field. ASGS SA1 has
@@ -253,9 +254,16 @@ function pickName(attrs, layerId) {
 const MAX_NAMES_SHOWN = 12;
 
 async function queryAdminLayer(layer, polygon) {
+  // Use the polygon's bounding box (4 numbers) rather than the full outline.
+  // A drawn polygon has hundreds of vertices; sending that as the query
+  // geometry makes a very long request URL that breaks when routed through the
+  // local proxy. The bbox keeps the URL tiny. It can slightly over-select at
+  // the corners, but for "which council/suburb does this area touch" that's an
+  // acceptable trade for reliability.
+  const [minX, minY, maxX, maxY] = turf.bbox(polygon);
   const url = new URL(`${ABS_ASGS.base}/${layer.service}/query`);
-  url.searchParams.set('geometry', JSON.stringify(toEsriPolygon(polygon)));
-  url.searchParams.set('geometryType', 'esriGeometryPolygon');
+  url.searchParams.set('geometry', `${minX},${minY},${maxX},${maxY}`);
+  url.searchParams.set('geometryType', 'esriGeometryEnvelope');
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
   url.searchParams.set('inSR', '4326');
   url.searchParams.set('returnGeometry', 'false');
