@@ -8,11 +8,30 @@ Inspired by the [Visualising Australasia's Soils (VAS)](https://vas.soilcrc.com.
 portal, but built around a draw-an-area → generate-a-report workflow using
 nationally available open data APIs rather than VAS's own (non-public) dataset.
 
+## Live hosted version (no install needed)
+
+The `docs/` folder is a fully client-side build (same UI, calls the public APIs
+directly from the browser — no backend, no secrets involved). Enable it via
+**GitHub Pages**:
+
+Settings → Pages → Source: *Deploy from a branch* → Branch: `claude/festive-goldberg-skgax3` (or `main` once merged), folder **/docs** → Save.
+
+GitHub will publish it at `https://msaud1959.github.io/Spatial-Reporting-Tool/`
+within a minute or two. No Node, no npm, nothing to install.
+
 ## Stack
 
-- **Backend**: Node.js (Express) — aggregates data from public APIs per request.
-- **Frontend**: Leaflet + Leaflet.draw (plain JS, no build step).
-- **Geometry**: Turf.js, on both client (buffer preview) and server (centroid/area/clipping).
+Two equivalent UIs are kept in sync:
+
+- **`docs/`** — pure static site (HTML/CSS/JS), calls all public APIs directly
+  from the browser. Use this for GitHub Pages.
+- **`public/` + `server/`** — same UI, but data calls are proxied through a
+  small Node/Express backend. Use this if you'd rather run it locally with
+  `npm start` or want a place to add server-side logic (caching, auth, a
+  state-specific planning API, etc.) later.
+
+Both use Leaflet + Leaflet.draw for the map/drawing tools and Turf.js for
+geometry (centroid, area, point-buffer circles).
 
 ## Data sources
 
@@ -29,7 +48,7 @@ consistent national baseline. `server/config/dataSources.js` is the place to plu
 in a state-specific planning WFS/REST endpoint if you need exact zoning for one
 jurisdiction.
 
-## Running it
+## Running it locally (Node version)
 
 ```bash
 npm install
@@ -43,7 +62,7 @@ Then open http://localhost:3000.
 2. Click **Generate Report**.
 3. Use **Print / Save PDF** to export the report.
 
-## API
+## API (Node version only)
 
 `POST /api/report`
 

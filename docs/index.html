@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spatial Reporting Tool</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Spatial Reporting Tool</h1>
+    <p>Draw a polygon or place a point with a buffer radius, then generate a soil, administrative &amp; land-use report for that area (Australia). Runs entirely in your browser — no server required.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>1. Define an area</h2>
+        <div class="mode-buttons">
+          <button id="mode-polygon" class="mode-btn active">Draw Polygon</button>
+          <button id="mode-point" class="mode-btn">Point + Buffer</button>
+        </div>
+
+        <div id="point-controls" class="hidden">
+          <label for="radius">Buffer radius (metres)</label>
+          <input type="range" id="radius" min="50" max="20000" step="50" value="500" />
+          <span id="radius-value">500 m</span>
+          <p class="hint">Click on the map to place the centre point.</p>
+        </div>
+
+        <p class="hint" id="polygon-hint">Use the polygon tool (top-left of map) to draw the area of interest, or click "Finish" to close it.</p>
+
+        <button id="clear-btn" class="secondary-btn">Clear area</button>
+      </section>
+
+      <section class="panel">
+        <h2>2. Generate report</h2>
+        <button id="generate-btn" disabled>Generate Report</button>
+        <div id="status" class="status"></div>
+      </section>
+    </aside>
+
+    <main class="map-container">
+      <div id="map"></div>
+    </main>
+
+    <aside id="report-panel" class="report-panel hidden">
+      <div class="report-header">
+        <h2>Spatial Report</h2>
+        <div class="report-actions">
+          <button id="print-btn" class="secondary-btn">Print / Save PDF</button>
+          <button id="close-report-btn" class="secondary-btn">Close</button>
+        </div>
+      </div>
+      <div id="report-content"></div>
+    </aside>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+  <script src="js/dataSources.js"></script>
+  <script src="js/services.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
