@@ -5,11 +5,18 @@
 
 const FETCH_TIMEOUT_MS = 12000;
 
+// When the app is served from the bundled Node server (npm start), it offers a
+// same-origin /proxy endpoint that fetches the government APIs server-side,
+// where CORS doesn't apply. This is the reliable path, so we use it first when
+// running on localhost.
+const RUNNING_LOCAL = ['localhost', '127.0.0.1', '0.0.0.0'].includes(location.hostname);
+const localProxy = (u) => `/proxy?url=${encodeURIComponent(u)}`;
+
 // Some of the government data servers don't send CORS headers, so a browser
 // running on github.io is blocked from reading their responses ("Failed to
-// fetch"). To keep the static site working without a backend, we try the API
-// directly first (fast path when CORS is allowed), then fall back to public
-// CORS proxies that re-serve the response with permissive headers.
+// fetch"). On GitHub Pages (no backend) we try the API directly first (fast
+// path when CORS is allowed), then fall back to public CORS proxies that
+// re-serve the response with permissive headers.
 const CORS_PROXIES = [
   (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
@@ -55,6 +62,8 @@ async function timedFetch(url, options) {
 }
 
 async function fetchEsriJson(url) {
+  // Local server proxy is the most reliable; use it directly when available.
+  if (RUNNING_LOCAL) return fetchJson(url);
   try {
     return await jsonpFetch(url);
   } catch (err) {
@@ -64,7 +73,9 @@ async function fetchEsriJson(url) {
 
 async function fetchJson(url, options = {}) {
   const direct = String(url);
-  const targets = [direct, ...CORS_PROXIES.map((p) => p(direct))];
+  const targets = RUNNING_LOCAL
+    ? [localProxy(direct), direct]
+    : [direct, ...CORS_PROXIES.map((p) => p(direct))];
   let lastErr;
   for (const target of targets) {
     try {
