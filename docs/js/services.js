@@ -86,10 +86,17 @@ function toEsriPolygon(polygonFeature) {
   return { rings: polygonFeature.geometry.coordinates, spatialReference: { wkid: 4326 } };
 }
 
-function pickName(attrs) {
+function pickName(attrs, layerId) {
+  // Prefer the field that matches this layer (e.g. lga_name_2021 for the LGA
+  // layer), then fall back to a code field, then any *_name field. ASGS SA1 has
+  // no name field, so it falls back to sa1_code_2021.
+  const byLayer = layerId && (attrs[`${layerId}_name_2021`] || attrs[`${layerId}_code_2021`]);
+  if (byLayer) return byLayer;
   const candidate = Object.keys(attrs).find((k) => /name$/i.test(k));
   return candidate ? attrs[candidate] : JSON.stringify(attrs);
 }
+
+const MAX_NAMES_SHOWN = 12;
 
 async function queryLayer(layer, polygon) {
   const url = new URL(`${ABS_ASGS.base}/${layer.service}/query`);
@@ -111,9 +118,13 @@ async function getAdminReport(polygon) {
     ABS_ASGS.layers.map(async (layer) => {
       try {
         const features = await queryLayer(layer, polygon);
-        return { id: layer.id, name: layer.name, matches: features.map(pickName), error: null };
+        // A large drawn area can intersect hundreds of fine-grained units (esp.
+        // SA1), so dedupe the names and cap how many we surface.
+        const allNames = [...new Set(features.map((f) => pickName(f, layer.id)))].sort();
+        const matches = allNames.slice(0, MAX_NAMES_SHOWN);
+        return { id: layer.id, name: layer.name, matches, totalMatches: allNames.length, error: null };
       } catch (err) {
-        return { id: layer.id, name: layer.name, matches: [], error: err.message };
+        return { id: layer.id, name: layer.name, matches: [], totalMatches: 0, error: err.message };
       }
     })
   );

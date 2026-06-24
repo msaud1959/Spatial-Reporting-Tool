@@ -21,8 +21,10 @@ const ReportView = (() => {
   function renderAdmin(admin) {
     const rows = admin.boundaries.map((b) => {
       if (b.error) return `<li><strong>${b.name}:</strong> <span class="error-note">unavailable (${b.error})</span></li>`;
-      const matches = b.matches.length ? b.matches.join(', ') : 'no match';
-      return `<li><strong>${b.name}:</strong> ${matches}</li>`;
+      if (!b.matches.length) return `<li><strong>${b.name}:</strong> no match</li>`;
+      const hidden = (b.totalMatches || b.matches.length) - b.matches.length;
+      const more = hidden > 0 ? ` <em>…and ${hidden} more (${b.totalMatches} total)</em>` : '';
+      return `<li><strong>${b.name}:</strong> ${b.matches.join(', ')}${more}</li>`;
     }).join('');
 
     return `
