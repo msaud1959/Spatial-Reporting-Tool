@@ -110,46 +110,127 @@ function normaliseArea(area) {
   return { polygon, centroid, areaHectares, bbox };
 }
 
-// ---- Soil (CSIRO/TERN SLGA) -------------------------------------------------
+// ---- Soil (CSIRO/TERN SLGA point "Drill" API) ------------------------------
+// The ASRIS SLGA "Drill" API returns every soil attribute at all six standard
+// depths for a single point in one call. This replaced an earlier (incorrect)
+// per-attribute ArcGIS identify approach.
 
-async function identifyPixel(coverage, [lng, lat]) {
-  const base = SLGA.restBase.replace('{COVERAGE}', coverage);
-  const url = new URL(`${base}/identify`);
-  url.searchParams.set('geometry', JSON.stringify({ x: lng, y: lat, spatialReference: { wkid: 4326 } }));
-  url.searchParams.set('geometryType', 'esriGeometryPoint');
-  url.searchParams.set('sr', '4326');
-  url.searchParams.set('returnGeometry', 'false');
-  url.searchParams.set('f', 'json');
+// Match an SLGA attribute code from a free-text layer name.
+const ATTR_KEYWORDS = [
+  { key: 'CLY', re: /\bclay\b/i },
+  { key: 'SLT', re: /\bsilt\b/i },
+  { key: 'SND', re: /\bsand\b/i },
+  { key: 'PHW', re: /\bph\b|p\.?h\.?\s*\(?water|soil\s*ph/i },
+  { key: 'SOC', re: /organic\s*carbon|\bsoc\b|\borganic\b/i },
+  { key: 'AWC', re: /available\s*water|water\s*capacity|\bawc\b/i },
+  { key: 'BDW', re: /bulk\s*dens|\bbdw?\b|density/i },
+  { key: 'NTO', re: /nitrogen|\bnto?\b/i }
+];
 
-  const json = await fetchEsriJson(url);
-  const value = json?.value ?? json?.results?.[0]?.attributes?.['Pixel Value'];
-  const parsed = value === undefined || value === 'NoData' ? null : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+// Match a standard SLGA depth label from a free-text name (handles "0-5cm",
+// "0 to 5 cm", "000_005", etc).
+const DEPTH_PATTERNS = [
+  { label: '0-5 cm', re: /\b0+\D*0*5\b|0-5|000[_-]?005/ },
+  { label: '5-15 cm', re: /\b0*5\D*15\b|5-15|005[_-]?015/ },
+  { label: '15-30 cm', re: /\b15\D*30\b|15-30|015[_-]?030/ },
+  { label: '30-60 cm', re: /\b30\D*60\b|30-60|030[_-]?060/ },
+  { label: '60-100 cm', re: /\b60\D*100\b|60-100|060[_-]?100/ },
+  { label: '100-200 cm', re: /\b100\D*200\b|100-200/ }
+];
+
+function matchAttr(name) {
+  const hit = ATTR_KEYWORDS.find((a) => a.re.test(name));
+  return hit ? hit.key : null;
+}
+function matchDepth(name) {
+  const hit = DEPTH_PATTERNS.find((d) => d.re.test(name));
+  return hit ? hit.label : null;
 }
 
-async function getSoilReport(centroid) {
-  const attributes = await Promise.all(
-    SLGA.attributes.map(async (attr) => {
-      const depths = await Promise.all(
-        SLGA.depths.map(async (depth) => {
-          const coverage = `${attr.coverage}_${depth.id}`;
-          try {
-            const value = await identifyPixel(coverage, centroid);
-            return { label: depth.label, value };
-          } catch (err) {
-            return { label: depth.label, value: null, error: err.message };
-          }
-        })
-      );
-      return { key: attr.key, label: attr.label, unit: attr.unit, depths };
-    })
-  );
+function cleanValue(v) {
+  if (v === null || v === undefined || v === '' || v === 'NoData') return null;
+  const n = Number(v);
+  // SLGA uses large negative sentinels for no-data.
+  return Number.isFinite(n) && n > -1000 ? n : null;
+}
+
+// Walk the (variably-shaped) Drill response and pull out every {name, value}
+// pair so we can match them to attributes/depths regardless of nesting.
+function flattenDrill(node, nameHint, out) {
+  if (node == null) return;
+  if (Array.isArray(node)) {
+    node.forEach((item) => flattenDrill(item, nameHint, out));
+    return;
+  }
+  if (typeof node === 'object') {
+    const name = node.Name || node.name || node.Layer || node.layer ||
+                 node.Title || node.title || node.Attribute || nameHint;
+    const rawVal = node.Value ?? node.value ?? node.PixelValue ?? node.pixelValue ?? node.Result;
+    if (name && (rawVal !== undefined)) out.push({ name: String(name), value: rawVal });
+    // Recurse into nested arrays/objects (e.g. a layer with a Depths array).
+    Object.entries(node).forEach(([k, v]) => {
+      if (v && typeof v === 'object') flattenDrill(v, node.Name || node.name || nameHint || k, out);
+    });
+  }
+}
+
+function buildSoilAttributes(raw) {
+  const flat = [];
+  flattenDrill(raw, null, flat);
+
+  // Seed the full attribute x depth grid (so the report layout is stable).
+  const grid = {};
+  SLGA.attributes.forEach((attr) => {
+    grid[attr.key] = {};
+    SLGA.depths.forEach((d) => { grid[attr.key][d.label] = null; });
+  });
+
+  let matched = 0;
+  flat.forEach(({ name, value }) => {
+    const key = matchAttr(name);
+    const depth = matchDepth(name);
+    if (key && depth && grid[key] && depth in grid[key]) {
+      const v = cleanValue(value);
+      if (v !== null) { grid[key][depth] = v; matched++; }
+    }
+  });
+
+  const attributes = SLGA.attributes.map((attr) => ({
+    key: attr.key, label: attr.label, unit: attr.unit,
+    depths: SLGA.depths.map((d) => ({ label: d.label, value: grid[attr.key][d.label] }))
+  }));
+  return { attributes, matched, received: flat.length };
+}
+
+async function getSoilReport([lng, lat]) {
+  const url = new URL('https://www.asris.csiro.au/ASRISApi/api/SLGA/simple/Drill');
+  url.searchParams.set('longitude', lng);
+  url.searchParams.set('latitude', lat);
+  url.searchParams.set('layers', 'ALL');
+  url.searchParams.set('kernal', '0');
+  url.searchParams.set('json', 'true');
+
+  let raw = null, error = null;
+  try {
+    raw = await fetchJson(url);
+  } catch (err) {
+    error = err.message;
+  }
+
+  const { attributes, matched, received } = buildSoilAttributes(raw);
+  // Got a response but couldn't map any values -> flag it so we can see the shape.
+  if (!error && received > 0 && matched === 0) {
+    error = `Received soil data but could not read it (got ${received} entries). Raw sample: ${JSON.stringify(raw).slice(0, 300)}`;
+  } else if (!error && received === 0) {
+    error = 'Soil service returned no readable data for this location.';
+  }
 
   return {
-    source: 'CSIRO/TERN Soil and Landscape Grid of Australia (SLGA)',
+    source: 'CSIRO/TERN Soil and Landscape Grid of Australia (SLGA) — ASRIS point Drill',
     sourceUrl: 'https://esoil.io/TERNLandscapes/Public/Pages/SLGA/index.html',
-    resolution: '~90 m grid cell at the area centroid (point sample, not an area average)',
-    attributes
+    resolution: '~90 m grid, sampled at the area centroid (point sample, not an area average)',
+    attributes,
+    error
   };
 }
 

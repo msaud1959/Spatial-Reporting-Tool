@@ -79,7 +79,7 @@ const ReportView = (() => {
       const b = byId[id];
       const f = friendly[id] || { label: b.name, help: '' };
       let value;
-      if (b.error) value = `<span class="error-note">unavailable</span>`;
+      if (b.error) value = `<span class="error-note" title="${String(b.error).replace(/"/g, '&quot;')}">unavailable — ${b.error}</span>`;
       else if (!b.matches.length) value = '—';
       else if (id === 'sa1') value = `${b.totalMatches} small area${b.totalMatches === 1 ? '' : 's'}`;
       else {
@@ -159,9 +159,14 @@ const ReportView = (() => {
       return `<tr><th>${info.name} <small>(${attr.unit})</small></th>${cells}</tr>`;
     }).join('');
 
+    const errNote = soil.error
+      ? `<p class="error-note">Soil data issue: ${soil.error}</p>`
+      : '';
+
     return `
       <div class="report-section">
         <h3>🌱 Soil at a glance</h3>
+        ${errNote}
         ${texture ? `<p class="lead">The topsoil here is broadly <strong>${texture}</strong>.</p>` : ''}
         <p class="muted">Values below are for the topsoil (0–5 cm). Tap "Show all depths" for the full profile.</p>
         <div class="soil-grid">${cards}</div>
