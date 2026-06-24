@@ -89,5 +89,65 @@ const SpatialMap = (() => {
     return map;
   }
 
-  return { setMode, setRadius, clear, getArea, getMap };
+  // ---- Soil pits / sites layer ----------------------------------------------
+  const soilSitesLayer = L.layerGroup();
+  let soilSitesOn = false;
+
+  function notifySites(detail) {
+    document.dispatchEvent(new CustomEvent('soil-sites-status', { detail }));
+  }
+
+  function sitePopupHtml(site) {
+    const a = site.attributes || {};
+    const rows = Object.keys(a)
+      .filter((k) => a[k] != null && a[k] !== '' && !/^(objectid|shape|globalid|gdb_)/i.test(k))
+      .slice(0, 8)
+      .map((k) => `<tr><th style="text-align:left;padding-right:6px;font-weight:600">${k}</th><td>${a[k]}</td></tr>`)
+      .join('');
+    return `<strong>Soil pit / sampling site</strong><br/>
+      <span style="font-size:11px;color:#555">${site.source}</span>
+      <table style="font-size:11px;margin-top:4px;border-collapse:collapse">${rows}</table>`;
+  }
+
+  function siteMarker(site) {
+    return L.circleMarker([site.lat, site.lng], {
+      radius: 4, color: '#7c2d12', weight: 1, fillColor: '#ea580c', fillOpacity: 0.85
+    }).bindPopup(sitePopupHtml(site));
+  }
+
+  async function refreshSoilSites() {
+    if (!soilSitesOn) return;
+    if (map.getZoom() < SOIL_SITES.minZoom) {
+      soilSitesLayer.clearLayers();
+      notifySites({ tooFar: true });
+      return;
+    }
+    notifySites({ loading: true });
+    const b = map.getBounds();
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    try {
+      const sites = await getSoilSites(bbox); // defined in js/services.js
+      soilSitesLayer.clearLayers();
+      sites.forEach((s) => siteMarker(s).addTo(soilSitesLayer));
+      notifySites({ count: sites.length });
+    } catch (err) {
+      notifySites({ error: err.message });
+    }
+  }
+
+  function toggleSoilSites(on) {
+    soilSitesOn = on;
+    if (on) {
+      soilSitesLayer.addTo(map);
+      refreshSoilSites();
+    } else {
+      map.removeLayer(soilSitesLayer);
+      soilSitesLayer.clearLayers();
+      notifySites({ off: true });
+    }
+  }
+
+  map.on('moveend', () => { if (soilSitesOn) refreshSoilSites(); });
+
+  return { setMode, setRadius, clear, getArea, getMap, toggleSoilSites };
 })();

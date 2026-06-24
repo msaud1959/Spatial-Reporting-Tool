@@ -42,3 +42,25 @@ const ABARES_LANDUSE = {
 const NOMINATIM = {
   reverseUrl: 'https://nominatim.openstreetmap.org/reverse'
 };
+
+// Soil pits / sampling sites shown as points on the map.
+//
+// Visualising Australasia's Soils shows soil observation points that are
+// federated (via ANSIS / the TERN Soil Data Federator) from CSIRO's NatSoil
+// national soil-site database. Those national services require a free login /
+// API key to return the actual point data, which a keyless static site can't
+// use. So here we use the openly accessible (no-login) government ArcGIS
+// soil-site point services. Each is an Esri REST layer, so it works through the
+// JSONP path in services.js with no CORS proxy needed. Add more sources to the
+// list below to extend coverage.
+const SOIL_SITES = {
+  minZoom: 9,        // only query when zoomed in enough to keep responses small
+  maxPerSource: 500, // cap features per source per view
+  sources: [
+    {
+      name: 'Queensland soil & land resource sites',
+      queryUrl: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/SoilsAndLandResource/MapServer/105/query',
+      attribution: 'Queensland Government — Soils and Land Resource'
+    }
+  ]
+};

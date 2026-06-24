@@ -7,7 +7,7 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
-  <link rel="stylesheet" href="css/styles.css?v=4" />
+  <link rel="stylesheet" href="css/styles.css?v=6" />
 </head>
 <body>
   <header class="topbar">
@@ -41,6 +41,15 @@
         <button id="generate-btn" disabled>Generate Report</button>
         <div id="status" class="status"></div>
       </section>
+
+      <section class="panel">
+        <h2>Soil pits</h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="soil-sites-toggle" />
+          <span>Show soil pits / sampling sites on the map <span class="site-dot"></span></span>
+        </label>
+        <p class="hint" id="soil-sites-status">Tick the box, then zoom in to a region to see soil sampling sites (orange dots). Click a dot for details.</p>
+      </section>
     </aside>
 
     <main class="map-container">
@@ -62,10 +71,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
-  <script src="js/dataSources.js?v=5"></script>
-  <script src="js/services.js?v=5"></script>
-  <script src="js/map.js?v=5"></script>
-  <script src="js/report.js?v=5"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/dataSources.js?v=6"></script>
+  <script src="js/services.js?v=6"></script>
+  <script src="js/map.js?v=6"></script>
+  <script src="js/report.js?v=6"></script>
+  <script src="js/main.js?v=6"></script>
 </body>
 </html>

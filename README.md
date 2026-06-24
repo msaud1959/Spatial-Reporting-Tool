@@ -41,6 +41,18 @@ geometry (centroid, area, point-buffer circles).
 | Administrative boundaries | [ABS Australian Statistical Geography Standard (ASGS)](https://geo.abs.gov.au/) — State, LGA, SA2, SA1, Suburb/Locality | ArcGIS REST FeatureServer spatial query (`intersects` the drawn polygon) |
 | Planning / land-use | [ABARES Catchment Scale Land Use of Australia (CLUM)](https://www.agriculture.gov.au/abares/aclump/land-use/data-download) | WMS `GetFeatureInfo` at the area centroid |
 | Location summary | [OpenStreetMap Nominatim](https://nominatim.org/) | Reverse geocoding at the centroid |
+| Soil pits / sampling sites (map points + report) | Openly accessible government soil-site point services (e.g. [Queensland Soils and Land Resource](https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/SoilsAndLandResource/MapServer)) | ArcGIS REST envelope query for the current map view; points falling inside the drawn area are listed in the report |
+
+### A note on soil pits and Visualising Australasia's Soils (VAS)
+
+VAS displays soil observation points that are federated — via [ANSIS](https://ansis.net/) and the
+[TERN Soil Data Federator](https://esoil.io/TERNLandscapes/Public/Pages/SoilDataFederator/SoilDataFederator.html) —
+from CSIRO's **NatSoil** national soil-site database (~40,000 sites). Those national
+services require a **free login / API key** to return the actual point data, which a
+keyless, fully-static GitHub Pages site cannot use. So the "Soil pits" map layer here
+uses the **openly accessible (no-login)** government soil-site point services instead.
+Add more sources to `SOIL_SITES.sources` in `docs/js/dataSources.js` to extend coverage,
+or wire in an ANSIS/Federator key if you deploy a small backend that can hold it securely.
 
 Australia has no single national zoning/planning API — each state and ~550 local
 councils publish their own planning scheme — so CLUM land-use is used as a

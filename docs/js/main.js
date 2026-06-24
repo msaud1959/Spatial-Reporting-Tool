@@ -11,6 +11,8 @@
   const reportPanel = document.getElementById('report-panel');
   const closeReportBtn = document.getElementById('close-report-btn');
   const printBtn = document.getElementById('print-btn');
+  const soilSitesToggle = document.getElementById('soil-sites-toggle');
+  const soilSitesStatus = document.getElementById('soil-sites-status');
 
   function setStatus(text, kind) {
     statusEl.textContent = text || '';
@@ -74,4 +76,20 @@
 
   closeReportBtn.addEventListener('click', () => reportPanel.classList.add('hidden'));
   printBtn.addEventListener('click', () => window.print());
+
+  // Soil pits / sites layer toggle.
+  soilSitesToggle.addEventListener('change', () => {
+    SpatialMap.toggleSoilSites(soilSitesToggle.checked);
+  });
+
+  document.addEventListener('soil-sites-status', (e) => {
+    const d = e.detail || {};
+    if (d.off) soilSitesStatus.textContent = 'Tick the box, then zoom in to a region to see soil sampling sites (orange dots). Click a dot for details.';
+    else if (d.tooFar) soilSitesStatus.textContent = 'Zoom in closer to load soil sampling sites for the area in view.';
+    else if (d.loading) soilSitesStatus.textContent = 'Loading soil sampling sites…';
+    else if (d.error) soilSitesStatus.textContent = `Couldn't load soil sites just now (${d.error}).`;
+    else if (typeof d.count === 'number') soilSitesStatus.textContent = d.count
+      ? `${d.count} soil sampling site${d.count === 1 ? '' : 's'} shown in this view. Click a dot for details.`
+      : 'No public soil sampling sites found in this view (coverage varies by region).';
+  });
 })();

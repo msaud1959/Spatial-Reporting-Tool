@@ -179,6 +179,32 @@ const ReportView = (() => {
       </div>`;
   }
 
+  // ---- Soil pits in the selected area ----------------------------------------
+  function renderSoilSites(report) {
+    const sites = report.sites || [];
+    let body;
+    if (!sites.length) {
+      body = `<p class="muted">No public soil pits / sampling sites were found inside this area. These points come from openly available government soil-site datasets, which don't yet cover every region.</p>`;
+    } else {
+      const rows = sites.slice(0, 20).map((s, i) => {
+        const a = s.attributes || {};
+        const label = a.SITE_ID || a.site_id || a.PROJ_SITE_ID || a.NAME || a.name || `Site ${i + 1}`;
+        return `<tr><td>${label}</td><td>${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</td><td>${s.source}</td></tr>`;
+      }).join('');
+      const more = sites.length > 20 ? `<p class="muted">Showing 20 of ${sites.length}.</p>` : '';
+      body = `
+        <p class="lead"><strong>${sites.length}</strong> soil pit${sites.length === 1 ? '' : 's'} / sampling site${sites.length === 1 ? '' : 's'} fall inside this area.</p>
+        <table class="kv"><tr><th>Site</th><th>Location</th><th>Source</th></tr>${rows}</table>
+        ${more}`;
+    }
+    return `
+      <div class="report-section">
+        <h3>📌 Soil pits in this area</h3>
+        ${body}
+        <p class="source-note">Openly available government soil-site point data. The full national set (CSIRO NatSoil) is accessible through ANSIS with a free login.</p>
+      </div>`;
+  }
+
   function render(report) {
     const allFailed = report.soil.attributes.every((a) => a.depths.every((d) => d.value == null))
       && report.admin.boundaries.every((b) => b.error || !b.matches.length);
@@ -190,6 +216,7 @@ const ReportView = (() => {
       + renderLocation(report)
       + renderAdmin(report.admin)
       + renderSoil(report.soil)
+      + renderSoilSites(report)
       + renderPlanning(report.planning);
     document.getElementById('report-panel').classList.remove('hidden');
   }

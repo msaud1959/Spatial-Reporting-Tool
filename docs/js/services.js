@@ -265,6 +265,42 @@ async function reverseGeocode([lng, lat]) {
   }
 }
 
+// ---- Soil pits / sampling sites (public ArcGIS point services) -------------
+
+// Query one Esri soil-site point layer for everything inside a bbox.
+// bbox is [minLng, minLat, maxLng, maxLat].
+async function querySoilSiteSource(source, bbox) {
+  const [minX, minY, maxX, maxY] = bbox;
+  const url = new URL(source.queryUrl);
+  url.searchParams.set('geometry', JSON.stringify({ xmin: minX, ymin: minY, xmax: maxX, ymax: maxY, spatialReference: { wkid: 4326 } }));
+  url.searchParams.set('geometryType', 'esriGeometryEnvelope');
+  url.searchParams.set('spatialRel', 'esriSpatialRelIntersects');
+  url.searchParams.set('inSR', '4326');
+  url.searchParams.set('outSR', '4326');
+  url.searchParams.set('outFields', '*');
+  url.searchParams.set('returnGeometry', 'true');
+  url.searchParams.set('resultRecordCount', String(SOIL_SITES.maxPerSource));
+  url.searchParams.set('f', 'json');
+
+  const json = await fetchEsriJson(url);
+  if (json.error) throw new Error(json.error.message || 'ArcGIS error');
+  return (json.features || [])
+    .map((f) => ({ lat: f.geometry?.y, lng: f.geometry?.x, attributes: f.attributes || {}, source: source.name }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+}
+
+// Fetch soil-site points from every configured source inside a bbox. Each
+// source fails independently so one outage never hides the rest.
+async function getSoilSites(bbox) {
+  const perSource = await Promise.all(
+    SOIL_SITES.sources.map(async (s) => {
+      try { return await querySoilSiteSource(s, bbox); }
+      catch (err) { return []; }
+    })
+  );
+  return perSource.flat();
+}
+
 // ---- Report aggregation -----------------------------------------------------
 
 const MAX_AREA_HECTARES = 100000;
@@ -279,12 +315,19 @@ async function generateReport(area) {
     throw new Error(`Area too large (${areaHectares.toFixed(0)} ha). Please draw a smaller area (max ${MAX_AREA_HECTARES} ha).`);
   }
 
-  const [location, soil, admin, planning] = await Promise.all([
+  const [location, soil, admin, planning, sitesInBbox] = await Promise.all([
     reverseGeocode(centroid),
     getSoilReport(centroid),
     getAdminReport(polygon),
-    getPlanningReport(centroid)
+    getPlanningReport(centroid),
+    getSoilSites(bbox).catch(() => [])
   ]);
+
+  // Keep only the soil pits that actually fall inside the drawn area.
+  const sites = sitesInBbox.filter((s) => {
+    try { return turf.booleanPointInPolygon(turf.point([s.lng, s.lat]), polygon); }
+    catch (err) { return false; }
+  });
 
   return {
     generatedAt: new Date().toISOString(),
@@ -292,6 +335,7 @@ async function generateReport(area) {
     location,
     soil,
     admin,
-    planning
+    planning,
+    sites
   };
 }
