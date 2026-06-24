@@ -1,0 +1,23 @@
+{
+  "name": "spatial-reporting-tool",
+  "version": "1.0.0",
+  "description": "Spatial reporting tool: draw a polygon or point-buffer area and generate a report combining public soil, administrative and land-use/planning data for Australia.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:41729/git/msaud1959/Spatial-Reporting-Tool"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@turf/turf": "^7.3.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
