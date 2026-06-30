@@ -168,7 +168,10 @@ const ReportView = (() => {
         <h3>🌱 Soil at a glance</h3>
         ${errNote}
         ${texture ? `<p class="lead">The topsoil here is broadly <strong>${texture}</strong>.</p>` : ''}
-        <p class="muted">Values below are for the topsoil (0–5 cm). Tap "Show all depths" for the full profile.</p>
+        <p class="muted">
+          Values below are <strong>${soil.sampleCount > 1 ? `averages across ${soil.sampleCount} sample points` : 'from a single sample point'}</strong>
+          spread across the drawn area, for the topsoil (0–5 cm). Tap "Show all depths" for the full profile.
+        </p>
         <div class="soil-grid">${cards}</div>
 
         <details class="depth-details">

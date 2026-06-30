@@ -152,8 +152,15 @@ const SpatialMap = (() => {
   function focusSoilSites() {
     soilSitesOn = true;
     soilSitesLayer.addTo(map);
-    if (SOIL_SITES.coverageBounds) {
-      map.fitBounds(SOIL_SITES.coverageBounds); // triggers moveend -> refreshSoilSites
+    if (SOIL_SITES.focusView) {
+      // Jump straight to a spot with known data, zoomed in enough that
+      // refreshSoilSites (triggered by moveend) actually queries and renders
+      // pits — fitting the whole coverage bbox zooms out below minZoom and
+      // shows nothing.
+      const { center, zoom } = SOIL_SITES.focusView;
+      map.setView(center, zoom); // triggers moveend -> refreshSoilSites
+    } else if (SOIL_SITES.coverageBounds) {
+      map.fitBounds(SOIL_SITES.coverageBounds);
     } else {
       refreshSoilSites();
     }

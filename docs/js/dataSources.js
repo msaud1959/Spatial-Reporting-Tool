@@ -59,7 +59,12 @@ const SOIL_SITES = {
   // Rough lat/lng bounds [[south, west], [north, east]] where the configured
   // sources actually hold data. Used by the "Find soil pits" button to fly the
   // map to somewhere with coverage, so users aren't guessing where to look.
-  coverageBounds: [[-29.5, 137.9], [-9.0, 154.0]], // Queensland
+  coverageBounds: [[-29.5, 137.9], [-9.0, 154.0]], // Queensland (rough outer extent, last-resort fallback only)
+  // A specific spot inside that coverage confirmed to have soil-pit points,
+  // with a zoom level above minZoom. "Find soil pits" jumps straight here so
+  // pits are actually visible, instead of fitting the whole-Queensland bbox
+  // above (which zooms out far below minZoom and shows nothing).
+  focusView: { center: [-22.7128, 148.5764], zoom: 11 }, // Dysart / Biloela area, QLD
   sources: [
     {
       name: 'Queensland soil & land resource sites',
