@@ -20,7 +20,11 @@ const localProxy = (u) => `/proxy?url=${encodeURIComponent(u)}`;
 const CORS_PROXIES = [
   (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`
+  // codetabs takes everything after "quest=" as the raw target URL rather
+  // than a normally-decoded query param; percent-encoding it (and/or adding
+  // a trailing slash before the service name) makes it reject the request
+  // with a generic "Bad request" - so pass the URL through unencoded here.
+  (u) => `https://api.codetabs.com/v1/proxy?quest=${u}`
 ];
 
 let jsonpCounter = 0;
@@ -298,13 +302,13 @@ async function getSoilReportForArea(polygon, centroid) {
 
 // ---- Administrative boundaries (ABS ASGS) ----------------------------------
 
-function pickName(attrs, layerId) {
+function pickName(attrs, fieldPrefix) {
   // Prefer the field that matches this layer (e.g. lga_name_2021 for the LGA
-  // layer), then fall back to a code field, then any *_name field. ASGS SA1 has
-  // no name field, so it falls back to sa1_code_2021.
-  const byLayer = layerId && (attrs[`${layerId}_name_2021`] || attrs[`${layerId}_code_2021`]);
+  // layer), then fall back to a code field, then any *_name_<year> field. ASGS
+  // SA1 has no name field, so it falls back to sa1_code_2021.
+  const byLayer = fieldPrefix && (attrs[`${fieldPrefix}_name_2021`] || attrs[`${fieldPrefix}_code_2021`]);
   if (byLayer) return byLayer;
-  const candidate = Object.keys(attrs).find((k) => /name$/i.test(k));
+  const candidate = Object.keys(attrs).find((k) => /_name_\d{4}$/i.test(k));
   return candidate ? attrs[candidate] : JSON.stringify(attrs);
 }
 
@@ -339,7 +343,7 @@ async function queryAdminLayer(layer, polygon) {
   url.searchParams.set('outFields', '*');
   const json = await fetchEsriJson(url);
   if (json.error) throw new Error(json.error.message || 'ArcGIS error');
-  const names = (json.features || []).map((f) => pickName(f.attributes, layer.id));
+  const names = (json.features || []).map((f) => pickName(f.attributes, layer.fieldPrefix || layer.id));
   return { names, count: names.length };
 }
 
