@@ -26,7 +26,9 @@ const CORS_PROXIES = [
     build: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
     unwrap: (json) => (typeof json.contents === 'string' ? JSON.parse(json.contents) : json.contents)
   },
-  { build: (u) => `https://thingproxy.freeboard.io/fetch/${u}` }
+  { build: (u) => `https://thingproxy.freeboard.io/fetch/${u}` },
+  { build: (u) => `https://corsproxy.org/?${encodeURIComponent(u)}` },
+  { build: (u) => `https://proxy.cors.sh/${u}` }
 ];
 
 let jsonpCounter = 0;
