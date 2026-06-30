@@ -19,7 +19,8 @@ const localProxy = (u) => `/proxy?url=${encodeURIComponent(u)}`;
 // re-serve the response with permissive headers.
 const CORS_PROXIES = [
   (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
 ];
 
 let jsonpCounter = 0;
@@ -79,12 +80,19 @@ async function fetchEsriJson(url) {
 async function fetchJson(url, options = {}) {
   const direct = String(url);
   const targets = RUNNING_LOCAL
-    ? [localProxy(direct), direct]
-    : [direct, ...CORS_PROXIES.map((p) => p(direct))];
-  let lastErr;
+    ? [{ label: 'local proxy', url: localProxy(direct) }, { label: 'direct', url: direct }]
+    : [
+        { label: 'direct', url: direct },
+        ...CORS_PROXIES.map((p, i) => ({ label: `CORS proxy ${i + 1}`, url: p(direct) }))
+      ];
+  // Browsers hide the real reason for a CORS/network failure behind the
+  // generic "Failed to fetch" TypeError, which is useless on its own. Collect
+  // which fallback was tried and why each one failed so the final error
+  // actually says something diagnosable instead of just "Failed to fetch".
+  const attempts = [];
   for (const target of targets) {
     try {
-      const res = await timedFetch(target, options);
+      const res = await timedFetch(target.url, options);
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try { const t = await res.text(); if (t) detail += `: ${t.slice(0, 200)}`; } catch (e) { /* ignore */ }
@@ -92,11 +100,11 @@ async function fetchJson(url, options = {}) {
       }
       return await res.json();
     } catch (err) {
-      lastErr = err;
+      attempts.push(`${target.label}: ${err.message || err}`);
       // Try the next fallback on network/CORS failures; keep looping otherwise.
     }
   }
-  throw lastErr || new Error('Request failed');
+  throw new Error(`All ${attempts.length} attempt(s) failed — ${attempts.join(' | ')}`);
 }
 
 // ---- Geometry -------------------------------------------------------------
