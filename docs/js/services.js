@@ -17,14 +17,16 @@ const localProxy = (u) => `/proxy?url=${encodeURIComponent(u)}`;
 // fetch"). On GitHub Pages (no backend) we try the API directly first (fast
 // path when CORS is allowed), then fall back to public CORS proxies that
 // re-serve the response with permissive headers.
+// Each entry builds the proxied request URL from the target; `unwrap` (if
+// present) extracts the real JSON payload from the proxy's own response
+// shape (e.g. allorigins' /get wraps the body as a string inside `contents`).
 const CORS_PROXIES = [
-  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  // codetabs takes everything after "quest=" as the raw target URL rather
-  // than a normally-decoded query param; percent-encoding it (and/or adding
-  // a trailing slash before the service name) makes it reject the request
-  // with a generic "Bad request" - so pass the URL through unencoded here.
-  (u) => `https://api.codetabs.com/v1/proxy?quest=${u}`
+  { build: (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}` },
+  {
+    build: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    unwrap: (json) => (typeof json.contents === 'string' ? JSON.parse(json.contents) : json.contents)
+  },
+  { build: (u) => `https://thingproxy.freeboard.io/fetch/${u}` }
 ];
 
 let jsonpCounter = 0;
@@ -87,7 +89,7 @@ async function fetchJson(url, options = {}) {
     ? [{ label: 'local proxy', url: localProxy(direct) }, { label: 'direct', url: direct }]
     : [
         { label: 'direct', url: direct },
-        ...CORS_PROXIES.map((p, i) => ({ label: `CORS proxy ${i + 1}`, url: p(direct) }))
+        ...CORS_PROXIES.map((p, i) => ({ label: `CORS proxy ${i + 1}`, url: p.build(direct), unwrap: p.unwrap }))
       ];
   // Browsers hide the real reason for a CORS/network failure behind the
   // generic "Failed to fetch" TypeError, which is useless on its own. Collect
@@ -102,7 +104,8 @@ async function fetchJson(url, options = {}) {
         try { const t = await res.text(); if (t) detail += `: ${t.slice(0, 200)}`; } catch (e) { /* ignore */ }
         throw new Error(detail);
       }
-      return await res.json();
+      const json = await res.json();
+      return target.unwrap ? target.unwrap(json) : json;
     } catch (err) {
       attempts.push(`${target.label}: ${err.message || err}`);
       // Try the next fallback on network/CORS failures; keep looping otherwise.
