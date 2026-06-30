@@ -3,7 +3,7 @@
 // `error` field instead of throwing, so one unreachable source never breaks
 // the whole report.
 
-const FETCH_TIMEOUT_MS = 12000;
+const FETCH_TIMEOUT_MS = 20000;
 
 // When the app is served from the bundled Node server (npm start), it offers a
 // same-origin /proxy endpoint that fetches the government APIs server-side,
@@ -51,11 +51,16 @@ function jsonpFetch(url) {
   });
 }
 
-async function timedFetch(url, options) {
+async function timedFetch(url, options, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(new Error(`Timed out after ${timeoutMs / 1000}s`)), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError' || /aborted/i.test(err.message || '')) {
+      throw new Error(`Timed out after ${timeoutMs / 1000}s waiting for ${new URL(url, location.href).hostname}`);
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -234,11 +239,27 @@ function average(values) {
   return Math.round((sum / values.length) * 100) / 100;
 }
 
+// Run async tasks with limited concurrency so we don't fire every sample
+// point at the CSIRO Drill API at once - hammering it with too many parallel
+// requests makes individual calls slow enough to hit our fetch timeout.
+async function runLimited(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await task(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // Sample several points across the area and average each attribute/depth,
 // instead of reporting a single centroid value.
 async function getSoilReportForArea(polygon, centroid) {
   const samplePoints = getSamplePoints(polygon, turf.bbox(polygon), centroid);
-  const results = await Promise.all(samplePoints.map((pt) => getSoilReport(pt)));
+  const results = await runLimited(samplePoints, 3, (pt) => getSoilReport(pt));
   const successCount = results.filter((r) => !r.error).length;
 
   const attributes = SLGA.attributes.map((attr, ai) => ({
