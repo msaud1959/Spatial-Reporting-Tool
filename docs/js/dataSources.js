@@ -30,7 +30,9 @@ const ABS_ASGS = {
     { id: 'lga', name: 'Local Government Area', service: 'ASGS2021/LGA/MapServer/0' },
     { id: 'sa2', name: 'Statistical Area Level 2 (SA2)', service: 'ASGS2021/SA2/MapServer/0' },
     { id: 'sa1', name: 'Statistical Area Level 1 (SA1)', service: 'ASGS2021/SA1/MapServer/0' },
-    { id: 'locality', name: 'Suburb / Locality', service: 'ASGS2021/LOCALITY/MapServer/0' }
+    // ABS renamed this layer to "SAL" (Suburbs and Localities) for the 2021
+    // edition; the old "LOCALITY" service name no longer exists.
+    { id: 'locality', name: 'Suburb / Locality', service: 'ASGS2021/SAL/MapServer/0' }
   ]
 };
 
