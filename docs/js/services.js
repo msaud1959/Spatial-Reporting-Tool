@@ -197,10 +197,71 @@ async function getSoilReport([lng, lat]) {
     error = 'Soil service returned no readable data for this location.';
   }
 
+  return { attributes, error };
+}
+
+// Pick a handful of points spread across the drawn area (not just the
+// centroid) so large/irregular polygons get an averaged soil reading rather
+// than a single spot value. Centroid + up to an 8-point grid inside the
+// polygon, capped to keep the number of Drill API calls small.
+const MAX_SOIL_SAMPLE_POINTS = 9;
+
+function getSamplePoints(polygon, bbox, centroid) {
+  const points = [centroid];
+  const [minX, minY, maxX, maxY] = bbox;
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (!(width > 0) || !(height > 0)) return points;
+
+  const steps = 3; // 3x3 grid -> up to 4 interior points beyond the centroid/edges
+  for (let i = 1; i < steps && points.length < MAX_SOIL_SAMPLE_POINTS; i++) {
+    for (let j = 1; j < steps && points.length < MAX_SOIL_SAMPLE_POINTS; j++) {
+      const lng = minX + (width * i) / steps;
+      const lat = minY + (height * j) / steps;
+      try {
+        if (turf.booleanPointInPolygon(turf.point([lng, lat]), polygon)) {
+          points.push([lng, lat]);
+        }
+      } catch (err) { /* skip unusable point */ }
+    }
+  }
+  return points;
+}
+
+function average(values) {
+  if (!values.length) return null;
+  const sum = values.reduce((a, b) => a + b, 0);
+  return Math.round((sum / values.length) * 100) / 100;
+}
+
+// Sample several points across the area and average each attribute/depth,
+// instead of reporting a single centroid value.
+async function getSoilReportForArea(polygon, centroid) {
+  const samplePoints = getSamplePoints(polygon, turf.bbox(polygon), centroid);
+  const results = await Promise.all(samplePoints.map((pt) => getSoilReport(pt)));
+  const successCount = results.filter((r) => !r.error).length;
+
+  const attributes = SLGA.attributes.map((attr, ai) => ({
+    key: attr.key,
+    label: attr.label,
+    unit: attr.unit,
+    depths: SLGA.depths.map((d, di) => ({
+      label: d.label,
+      value: average(results.map((r) => r.attributes[ai].depths[di].value).filter((v) => v != null))
+    }))
+  }));
+
+  const error = successCount === 0
+    ? (results.find((r) => r.error)?.error || 'Soil service unavailable for this area.')
+    : null;
+
   return {
     source: 'CSIRO/TERN Soil and Landscape Grid of Australia (SLGA) — ASRIS point Drill',
     sourceUrl: 'https://esoil.io/TERNLandscapes/Public/Pages/SLGA/index.html',
-    resolution: '~90 m grid, sampled at the area centroid (point sample, not an area average)',
+    resolution: successCount > 1
+      ? `~90 m grid, averaged across ${successCount} sample points spread across the drawn area`
+      : '~90 m grid, sampled at the area centroid (point sample, not an area average)',
+    sampleCount: successCount,
     attributes,
     error
   };
@@ -384,7 +445,7 @@ async function generateReport(area) {
 
   const [location, soil, admin, planning, sitesInBbox] = await Promise.all([
     reverseGeocode(centroid),
-    getSoilReport(centroid),
+    getSoilReportForArea(polygon, centroid),
     getAdminReport(polygon),
     getPlanningReport(centroid),
     getSoilSites(bbox).catch(() => [])

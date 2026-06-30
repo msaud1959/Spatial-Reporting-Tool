@@ -37,7 +37,7 @@ geometry (centroid, area, point-buffer circles).
 
 | Report section | Source | Access method |
 |---|---|---|
-| Soil properties | [CSIRO/TERN Soil and Landscape Grid of Australia (SLGA)](https://esoil.io/TERNLandscapes/Public/Pages/SLGA/index.html) — clay, silt, sand, pH, organic carbon, available water capacity, bulk density, nitrogen, at 6 standard depths (0-5cm to 100-200cm) | ArcGIS REST `identify` on the public SLGA MapServer, sampled at the area centroid |
+| Soil properties | [CSIRO/TERN Soil and Landscape Grid of Australia (SLGA)](https://esoil.io/TERNLandscapes/Public/Pages/SLGA/index.html) — clay, silt, sand, pH, organic carbon, available water capacity, bulk density, nitrogen, at 6 standard depths (0-5cm to 100-200cm) | ASRIS SLGA point "Drill" API, queried at up to 9 points spread across the drawn area (centroid + an interior grid clipped to the polygon) and averaged per attribute/depth — falls back to a single centroid sample for very small areas |
 | Administrative boundaries | [ABS Australian Statistical Geography Standard (ASGS)](https://geo.abs.gov.au/) — State, LGA, SA2, SA1, Suburb/Locality | ArcGIS REST FeatureServer spatial query (`intersects` the drawn polygon) |
 | Planning / land-use | [ABARES Catchment Scale Land Use of Australia (CLUM)](https://www.agriculture.gov.au/abares/aclump/land-use/data-download) | WMS `GetFeatureInfo` at the area centroid |
 | Location summary | [OpenStreetMap Nominatim](https://nominatim.org/) | Reverse geocoding at the centroid |

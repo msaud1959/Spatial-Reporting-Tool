@@ -179,7 +179,7 @@ const ReportView = (() => {
           </table>
         </details>
 
-        <p class="source-note">Estimated from a ~90 m national soil grid at the area's centre — a guide, not a substitute for a soil test.<br/>
+        <p class="source-note">${soil.resolution || 'Estimated from a ~90 m national soil grid.'} — a guide, not a substitute for a soil test.<br/>
         Source: <a href="${soil.sourceUrl}" target="_blank" rel="noopener">CSIRO / TERN Soil &amp; Landscape Grid of Australia</a></p>
       </div>`;
   }
