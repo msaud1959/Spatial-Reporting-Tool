@@ -20,7 +20,7 @@ const localProxy = (u) => `/proxy?url=${encodeURIComponent(u)}`;
 const CORS_PROXIES = [
   (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`
 ];
 
 let jsonpCounter = 0;

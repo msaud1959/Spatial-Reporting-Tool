@@ -19,6 +19,15 @@ Settings → Pages → Source: *Deploy from a branch* → Branch: `claude/festiv
 GitHub will publish it at `https://msaud1959.github.io/Spatial-Reporting-Tool/`
 within a minute or two. No Node, no npm, nothing to install.
 
+**Reliability note**: most of the government data servers this app calls
+don't send CORS headers, so on GitHub Pages (no backend) requests fall back
+through a chain of free public CORS proxies (corsproxy.io, allorigins.win,
+codetabs.com). These are third-party services outside our control — they can
+be slow, rate-limited, or temporarily down, which shows up as "Failed to
+fetch" or a timeout in the report. If a section keeps failing on Pages, retry
+in a minute, or run the app locally (`npm start`, see below) where the same
+requests go through your own machine instead and are much more reliable.
+
 ## Stack
 
 Two equivalent UIs are kept in sync:
